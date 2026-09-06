@@ -16,7 +16,7 @@ jobs:
           libssl-dev libelf-dev bc git rsync kmod \
           debianutils ccache device-tree-compiler \
           gcc-aarch64-linux-gnu binfmt-support qemu-user-static \
-          losetup parted e2fsprogs systemd-container
+          parted e2fsprogs systemd-container
 
     - name: Clone CoreELEC Linux Kernel (5.4.210)
       run: |

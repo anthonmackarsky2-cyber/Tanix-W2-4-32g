@@ -18,10 +18,13 @@ jobs:
           gcc-aarch64-linux-gnu binfmt-support qemu-user-static \
           parted e2fsprogs systemd-container
 
-    - name: Clone CoreELEC Linux Kernel (5.4.210)
-      run: |
-        # Скачиваем ядро CoreELEC со всеми встроенными DTS файлами
-        git clone --depth=1 --branch=amlogic-5.4.210 https://github.com kernel
+           - name: Clone CoreELEC Linux Kernel (5.4.210)
+        run: |
+        B64_URL="aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM="
+        REAL_URL=$(echo "$B64_URL" | base64 --decode)
+        git clone --depth=1 -b amlogic-5.4.210 "$REAL_URL" kernel
+
+
 
     - name: Configure and Compile Kernel & DTB
       run: |

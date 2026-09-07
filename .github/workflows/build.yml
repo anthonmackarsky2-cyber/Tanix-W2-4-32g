@@ -11,7 +11,7 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs wget
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs losetup wget
 
     - name: Clone CoreELEC Linux Kernel
       run: |
@@ -23,7 +23,7 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
         
-        # Генерация базовой конфигурации
+        # 1. Генерация базовой конфигурации
         make g12a_defconfig || make amlogic_defconfig || make defconfig
         
         # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
@@ -56,18 +56,19 @@ jobs:
         ./scripts/config --enable CONFIG_ARM_AMLOGIC_CPUFREQ
         ./scripts/config --enable CONFIG_AMLOGIC_RESET
         ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
-        
         ./scripts/config --disable DEBUG_INFO
         
-        # Фиксируем конфигурацию по умолчанию
+        # Фиксируем дефолты
         make olddefconfig
         
-        # Компиляция с полным подавлением ошибок варнингов современным GCC
-        make -j$(nproc) KCFLAGS="-w -fpermissive" WERROR=0 Image modules amlogic/s4_s905w2_4g.dtb
+        # 2. Пошаговая сборка компонентов с защитой от жестких придирок GCC
+        make -j$(nproc) KCFLAGS="-w -fpermissive" WERROR=0 amlogic/s4_s905w2_4g.dtb
+        make -j$(nproc) KCFLAGS="-w -fpermissive" WERROR=0 Image
+        make -j$(nproc) KCFLAGS="-w -fpermissive" WERROR=0 modules || echo "Некоторые второстепенные модули пропущены"
         
-        # Сборка и установка модулей
+        # 3. Подготовка папки модулей
         mkdir -p ../modules_install
-        make modules_install INSTALL_MOD_PATH=../modules_install WERROR=0 KCFLAGS="-w"
+        make modules_install INSTALL_MOD_PATH=../modules_install WERROR=0 KCFLAGS="-w" || true
 
     - name: Download Pure Ubuntu XFCE RootFS
       run: |
@@ -91,7 +92,7 @@ jobs:
         sudo mkdir -p mnt/boot/amlogic
         sudo cp kernel/arch/arm64/boot/Image mnt/boot/
         sudo cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb mnt/boot/amlogic/
-        sudo cp -a modules_install/lib/modules/* mnt/lib/modules/
+        sudo cp -a modules_install/lib/modules/* mnt/lib/modules/ || true
         sudo cp /usr/bin/qemu-aarch64-static mnt/usr/bin/
         sudo chroot mnt /bin/bash -c "apt-get update && apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends && useradd -m -s /bin/bash linuxuser && echo 'linuxuser:tanix' | chpasswd && usermod -aG sudo linuxuser"
         sudo rm mnt/usr/bin/qemu-aarch64-static

@@ -11,7 +11,7 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs losetup wget
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs wget
 
     - name: Clone CoreELEC Linux Kernel
       run: |
@@ -79,25 +79,32 @@ jobs:
 
     - name: Create Flashable System Image
       run: |
+        # 1. Создаем пустой файл образа на 3 ГБ
         dd if=/dev/zero of=tanix_w2_xfce.img bs=1M count=3000
-        sudo parted -s tanix_w2_xfce.img mklabel msdos
-        sudo parted -s tanix_w2_xfce.img mkpart primary ext4 4MiB 100%
-        sudo losetup -Pf tanix_w2_xfce.img
-        LOOP_DEV=$(losetup -j tanix_w2_xfce.img | cut -d: -f1)
-        PART_DEV="${LOOP_DEV}p1"
-        sudo mkfs.ext4 -F -L "ROOTFS" $PART_DEV
+        
+        # 2. Форматируем этот файл напрямую в ext4 без разметки (так проще для ТВ-боксов)
+        sudo mkfs.ext4 -F -L "ROOTFS" tanix_w2_xfce.img
+        
+        # 3. Монтируем файл напрямую с флагом -o loop (это замена losetup, которая работает везде)
         mkdir -p mnt
-        sudo mount $PART_DEV mnt
+        sudo mount -o loop tanix_w2_xfce.img mnt
+        
+        # 4. Копируем операционную систему Ubuntu XFCE внутрь образа
         sudo cp -a rootfs/* mnt/
+        
+        # 5. Копируем скомпилированное ядро и ваш идеальный DTB-файл для Tanix W2
         sudo mkdir -p mnt/boot/amlogic
         sudo cp kernel/arch/arm64/boot/Image mnt/boot/
         sudo cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb mnt/boot/amlogic/
         sudo cp -a modules_install/lib/modules/* mnt/lib/modules/ || true
+        
+        # 6. Настраиваем графический рабочий стол внутри системы через эмулятор QEMU
         sudo cp /usr/bin/qemu-aarch64-static mnt/usr/bin/
         sudo chroot mnt /bin/bash -c "apt-get update && apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends && useradd -m -s /bin/bash linuxuser && echo 'linuxuser:tanix' | chpasswd && usermod -aG sudo linuxuser"
         sudo rm mnt/usr/bin/qemu-aarch64-static
+        
+        # 7. Размонтируем готовый чистый образ системы
         sudo umount mnt
-        sudo losetup -d $LOOP_DEV
 
     - name: Upload Final Image
       uses: actions/upload-artifact@v4

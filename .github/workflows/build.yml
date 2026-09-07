@@ -19,8 +19,8 @@ jobs:
         REAL_URL=$(echo "$B64_URL" | base64 --decode)
         git clone --depth=1 -b amlogic-5.4.210 "$REAL_URL" kernel
 
-    - name: Configure and Compile Kernel
-      run: |
+        - name: Configure and Compile Kernel
+        run: |
         cd kernel
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
@@ -28,9 +28,10 @@ jobs:
         ./scripts/config --disable DEBUG_INFO
         ./scripts/config --disable DEBUG_INFO_DWARF4
         ./scripts/config --disable DEBUG_INFO_DWARF5
-        make -j$(nproc) Image modules dtbs
+        make -j$(nproc) Image modules amlogic/s4_s905w2_4g.dtb
         mkdir -p ../modules_install
         make modules_install INSTALL_MOD_PATH=../modules_install
+
 
     - name: Download Pure Ubuntu XFCE RootFS
       run: |

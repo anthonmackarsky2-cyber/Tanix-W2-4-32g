@@ -8,14 +8,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - name: Update System Package Lists
+    - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-
-    - name: Download Reliable ARM GCC 10.3 Toolchain
-      run: |
-        mkdir -p opt/toolchain
-        wget -qO- https://arm.com | tar -xJ -C opt/toolchain --strip-components=1
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs wget gcc-10-aarch64-linux-gnu
 
     - name: Clone CoreELEC Linux Kernel
       run: |
@@ -25,8 +21,9 @@ jobs:
       run: |
         cd kernel
         export ARCH=arm64
-        export CROSS_COMPILE=${{ github.workspace }}/opt/toolchain/bin/aarch64-none-linux-gnu-
-        
+        # Используем стабильный и проверенный системный компилятор GCC 10
+        export CROSS_COMPILE=aarch64-linux-gnu-gcc-10 -
+
         make defconfig
         
         # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
@@ -63,7 +60,7 @@ jobs:
         
         make olddefconfig
         
-        # Пошаговая сборка компонентов родным компилятором ARM GCC
+        # Пошаговая сборка компонентов проверенным компилятором GCC 10
         make -j$(nproc) amlogic/s4_s905w2_4g.dtb
         make -j$(nproc) Image
         make -j$(nproc) modules || echo "Некоторые второстепенные модули пропущены"
@@ -80,14 +77,12 @@ jobs:
 
     - name: Assemble Linux System Structure
       run: |
-        # Собираем всю структуру папок напрямую, вообще без использования утилиты losetup
         mkdir -p output_system/boot/amlogic
         cp -a rootfs/* output_system/
         cp kernel/arch/arm64/boot/Image output_system/boot/
         cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb output_system/boot/amlogic/
         cp -a modules_install/lib/modules/* output_system/lib/modules/ || true
         
-        # Упаковываем готовую систему со всеми драйверами в один архив
         tar -czf tanix_w2_system.tar.gz -C output_system .
 
     - name: Upload Final System Archive

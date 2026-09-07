@@ -13,12 +13,14 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs systemd-container
 
-        - name: Clone CoreELEC Linux Kernel
-        run: git clone --depth=1 -b amlogic-5.4.210 $(echo "aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM=" | base64 --decode) kernel
+    - name: Clone CoreELEC Linux Kernel
+      run: |
+        B64_URL="aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM="
+        REAL_URL=$(echo "$B64_URL" | base64 --decode)
+        git clone --depth=1 -b amlogic-5.4.210 "$REAL_URL" kernel
 
-
-        - name: Configure and Compile Kernel
-        run: |
+    - name: Configure and Compile Kernel
+      run: |
         cd kernel
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
@@ -30,10 +32,12 @@ jobs:
         mkdir -p ../modules_install
         make modules_install INSTALL_MOD_PATH=../modules_install
 
-
-        - name: Download Pure Ubuntu XFCE RootFS
-        run: mkdir rootfs && wget -qO- $(echo "aHR0cHM6Ly9jZGltYWdlLnVidW50dS5jb20vdWJ1bnR1LWJhc2UvcmVsZWFzZXMvMjQuMDQvcmVsZWFzZS91YnVudHUtYmFzZS0yNC4wNC1iYXNlLWFybTY0LnRhci5neg==" | base64 --decode) | tar -xzC rootfs/
-
+    - name: Download Pure Ubuntu XFCE RootFS
+      run: |
+        mkdir rootfs
+        B64_OS="aHR0cHM6Ly9jZGltYWdlLnVidW50dS5jb20vdWJ1bnR1LWJhc2UvcmVsZWFzZXMvMjQuMDQvcmVsZWFzZS91YnVudHUtYmFzZS0yNC4wNC1iYXNlLWFybTY0LnRhci5neg=="
+        REAL_OS=$(echo "$B64_OS" | base64 --decode)
+        wget -qO- "$REAL_OS" | tar -xzC rootfs/
 
     - name: Create Flashable System Image
       run: |

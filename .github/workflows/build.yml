@@ -11,79 +11,72 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y binfmt-support qemu-user-static parted e2fsprogs git wget
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs losetup wget
 
-    - name: Set up Ubuntu 18.04 Docker Container
+    - name: Clone CoreELEC Linux Kernel
       run: |
-        docker run --name build_env -d -v ${{ github.workspace }}:/workspace -w /workspace ubuntu:18.04 sleep infinity
+        git clone --depth=1 -b amlogic-5.4.210 $(echo "aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM=" | base64 --decode) kernel
 
-    - name: Install Build Tools inside Ubuntu 18.04
+    - name: Configure and Compile Kernel
       run: |
-        docker exec build_env apt-get update
-        docker exec build_env apt-get install -y build-essential libncurses5-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu wget cpio
+        cd kernel
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        
+        # Генерация базовой конфигурации
+        make g12a_defconfig || make amlogic_defconfig || make defconfig
+        
+        # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
+        ./scripts/config --enable CONFIG_USB_XHCI_HCD
+        ./scripts/config --enable CONFIG_USB_XHCI_PLATFORM
+        ./scripts/config --enable CONFIG_USB_EHCI_HCD
+        ./scripts/config --enable CONFIG_USB_EHCI_HCD_PLATFORM
+        ./scripts/config --enable CONFIG_USB_AMLOGIC_PHY
+        ./scripts/config --enable CONFIG_AMLOGIC_USB
+        ./scripts/config --enable CONFIG_DRM
+        ./scripts/config --enable CONFIG_DRM_AMLOGIC
+        ./scripts/config --enable CONFIG_DRM_AMLOGIC_MESON_VPU
+        ./scripts/config --enable CONFIG_DRM_AMLOGIC_HDMITX
+        ./scripts/config --enable CONFIG_MALI_MIDGARD
+        ./scripts/config --enable CONFIG_MALI_BIFROST
+        ./scripts/config --enable CONFIG_SND_MESON_AXG_SOUND_CARD
+        ./scripts/config --enable CONFIG_SND_MESON_CODEC_S4
+        ./scripts/config --enable CONFIG_NETDEVICES
+        ./scripts/config --enable CONFIG_ETHERNET
+        ./scripts/config --enable CONFIG_STMMAC_ETH
+        ./scripts/config --enable CONFIG_STMMAC_PLATFORM
+        ./scripts/config --enable CONFIG_WLAN
+        ./scripts/config --enable CONFIG_BRCMFMAC
+        ./scripts/config --enable CONFIG_RTL8XXXU
+        ./scripts/config --enable CONFIG_MMC
+        ./scripts/config --enable CONFIG_MMC_MESON_GX
+        ./scripts/config --enable CONFIG_EXFAT_FS
+        ./scripts/config --enable CONFIG_NTFS_FS
+        ./scripts/config --enable CONFIG_EXT4_FS
+        ./scripts/config --enable CONFIG_ARM_AMLOGIC_CPUFREQ
+        ./scripts/config --enable CONFIG_AMLOGIC_RESET
+        ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
+        
+        ./scripts/config --disable DEBUG_INFO
+        
+        # Фиксируем конфигурацию по умолчанию
+        make olddefconfig
+        
+        # Компиляция с полным подавлением ошибок варнингов современным GCC
+        make -j$(nproc) KCFLAGS="-w -fpermissive" WERROR=0 Image modules amlogic/s4_s905w2_4g.dtb
+        
+        # Сборка и установка модулей
+        mkdir -p ../modules_install
+        make modules_install INSTALL_MOD_PATH=../modules_install WERROR=0 KCFLAGS="-w"
 
-    - name: Clone CoreELEC Linux Kernel inside Container
-      run: |
-        docker exec build_env git clone --depth=1 -b amlogic-5.4.210 $(echo "aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM=" | base64 --decode) kernel
-
-    - name: Configure and Compile Kernel inside Ubuntu 18.04
-      run: |
-        docker exec build_env bash -c "
-          cd kernel
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          make g12a_defconfig || make amlogic_defconfig || make defconfig
-          
-          # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
-          ./scripts/config --enable CONFIG_USB_XHCI_HCD
-          ./scripts/config --enable CONFIG_USB_XHCI_PLATFORM
-          ./scripts/config --enable CONFIG_USB_EHCI_HCD
-          ./scripts/config --enable CONFIG_USB_EHCI_HCD_PLATFORM
-          ./scripts/config --enable CONFIG_USB_AMLOGIC_PHY
-          ./scripts/config --enable CONFIG_AMLOGIC_USB
-          ./scripts/config --enable CONFIG_DRM
-          ./scripts/config --enable CONFIG_DRM_AMLOGIC
-          ./scripts/config --enable CONFIG_DRM_AMLOGIC_MESON_VPU
-          ./scripts/config --enable CONFIG_DRM_AMLOGIC_HDMITX
-          ./scripts/config --enable CONFIG_MALI_MIDGARD
-          ./scripts/config --enable CONFIG_MALI_BIFROST
-          ./scripts/config --enable CONFIG_SND_MESON_AXG_SOUND_CARD
-          ./scripts/config --enable CONFIG_SND_MESON_CODEC_S4
-          ./scripts/config --enable CONFIG_NETDEVICES
-          ./scripts/config --enable CONFIG_ETHERNET
-          ./scripts/config --enable CONFIG_STMMAC_ETH
-          ./scripts/config --enable CONFIG_STMMAC_PLATFORM
-          ./scripts/config --enable CONFIG_WLAN
-          ./scripts/config --enable CONFIG_BRCMFMAC
-          ./scripts/config --enable CONFIG_RTL8XXXU
-          ./scripts/config --enable CONFIG_MMC
-          ./scripts/config --enable CONFIG_MMC_MESON_GX
-          ./scripts/config --enable CONFIG_EXFAT_FS
-          ./scripts/config --enable CONFIG_NTFS_FS
-          ./scripts/config --enable CONFIG_EXT4_FS
-          ./scripts/config --enable CONFIG_ARM_AMLOGIC_CPUFREQ
-          ./scripts/config --enable CONFIG_AMLOGIC_RESET
-          ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
-          
-          ./scripts/config --disable DEBUG_INFO
-          
-          # Автоматически принимаем все настройки и закрываем интерактивные вопросы
-          make olddefconfig
-          
-          # Запуск компиляции
-          make -j\$(nproc) Image modules amlogic/s4_s905w2_4g.dtb
-          mkdir -p ../modules_install
-          make modules_install INSTALL_MOD_PATH=../modules_install
-        "
-
-    - name: Download Pure Ubuntu XFCE RootFS on Host
+    - name: Download Pure Ubuntu XFCE RootFS
       run: |
         mkdir rootfs
         B64_OS="aHR0cHM6Ly9jZGltYWdlLnVidW50dS5jb20vdWJ1bnR1LWJhc2UvcmVsZWFzZXMvMjQuMDQvcmVsZWFzZS91YnVudHUtYmFzZS0yNC4wNC1iYXNlLWFybTY0LnRhci5neg=="
         REAL_OS=$(echo "$B64_OS" | base64 --decode)
         wget -qO- "$REAL_OS" | tar -xzC rootfs/
 
-    - name: Create Flashable System Image on Host
+    - name: Create Flashable System Image
       run: |
         dd if=/dev/zero of=tanix_w2_xfce.img bs=1M count=3000
         sudo parted -s tanix_w2_xfce.img mklabel msdos

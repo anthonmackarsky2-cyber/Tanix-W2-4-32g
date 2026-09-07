@@ -11,7 +11,8 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs wget gcc-aarch64-linux-gnu
+        # Устанавливаем старый стабильный компилятор GCC 9 для ARM64
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs wget gcc-9-aarch64-linux-gnu
 
     - name: Clone CoreELEC Linux Kernel
       run: |
@@ -21,7 +22,8 @@ jobs:
       run: |
         cd kernel
         export ARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
+        # Переключаем сборку строго на компилятор GCC 9
+        export CROSS_COMPILE=aarch64-linux-gnu-gcc-9 -
         export KCFLAGS="-w -fpermissive"
 
         # 1. Генерация базовой конфигурации
@@ -62,7 +64,7 @@ jobs:
         # Фиксируем дефолты
         make WERROR=0 olddefconfig
         
-        # 2. Пошаговая сборка ядра и дерева устройств (без ломающихся модулей)
+        # 2. Пошаговая сборка ядра и дерева устройств старым компилятором
         make -j$(nproc) WERROR=0 amlogic/s4_s905w2_4g.dtb
         make -j$(nproc) WERROR=0 Image
 

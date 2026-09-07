@@ -34,13 +34,13 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           make g12a_defconfig || make amlogic_defconfig || make defconfig
           
+          # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
           ./scripts/config --enable CONFIG_USB_XHCI_HCD
           ./scripts/config --enable CONFIG_USB_XHCI_PLATFORM
           ./scripts/config --enable CONFIG_USB_EHCI_HCD
           ./scripts/config --enable CONFIG_USB_EHCI_HCD_PLATFORM
           ./scripts/config --enable CONFIG_USB_AMLOGIC_PHY
           ./scripts/config --enable CONFIG_AMLOGIC_USB
-          
           ./scripts/config --enable CONFIG_DRM
           ./scripts/config --enable CONFIG_DRM_AMLOGIC
           ./scripts/config --enable CONFIG_DRM_AMLOGIC_MESON_VPU
@@ -49,7 +49,6 @@ jobs:
           ./scripts/config --enable CONFIG_MALI_BIFROST
           ./scripts/config --enable CONFIG_SND_MESON_AXG_SOUND_CARD
           ./scripts/config --enable CONFIG_SND_MESON_CODEC_S4
-          
           ./scripts/config --enable CONFIG_NETDEVICES
           ./scripts/config --enable CONFIG_ETHERNET
           ./scripts/config --enable CONFIG_STMMAC_ETH
@@ -57,19 +56,21 @@ jobs:
           ./scripts/config --enable CONFIG_WLAN
           ./scripts/config --enable CONFIG_BRCMFMAC
           ./scripts/config --enable CONFIG_RTL8XXXU
-          
           ./scripts/config --enable CONFIG_MMC
           ./scripts/config --enable CONFIG_MMC_MESON_GX
           ./scripts/config --enable CONFIG_EXFAT_FS
           ./scripts/config --enable CONFIG_NTFS_FS
           ./scripts/config --enable CONFIG_EXT4_FS
-          
           ./scripts/config --enable CONFIG_ARM_AMLOGIC_CPUFREQ
           ./scripts/config --enable CONFIG_AMLOGIC_RESET
           ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
           
           ./scripts/config --disable DEBUG_INFO
           
+          # Автоматически принимаем все настройки и закрываем интерактивные вопросы
+          make olddefconfig
+          
+          # Запуск компиляции
           make -j\$(nproc) Image modules amlogic/s4_s905w2_4g.dtb
           mkdir -p ../modules_install
           make modules_install INSTALL_MOD_PATH=../modules_install

@@ -1,7 +1,7 @@
 name: Build Linux XFCE from CoreELEC Source
 
 on:
-  workflow_dispatch: # Запуск вручную кнопкой на сайте
+  workflow_dispatch:
 
 jobs:
   build-os:
@@ -11,88 +11,51 @@ jobs:
     - name: Install Build Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          build-essential libncurses-dev bison flex \
-          libssl-dev libelf-dev bc git rsync kmod \
-          debianutils ccache device-tree-compiler \
-          gcc-aarch64-linux-gnu binfmt-support qemu-user-static \
-          parted e2fsprogs systemd-container
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs systemd-container
 
-           - name: Clone CoreELEC Linux Kernel 5.4.210
-        run: |
+    - name: Clone CoreELEC Linux Kernel
+      run: |
         B64_URL="aHR0cHM6Ly9naXRodWIuY29tL0NvcmVFTEVDL2xpbnV4LWFtbG9naWM="
         REAL_URL=$(echo "$B64_URL" | base64 --decode)
         git clone --depth=1 -b amlogic-5.4.210 "$REAL_URL" kernel
 
-
-
-    - name: Configure and Compile Kernel & DTB
+    - name: Configure and Compile Kernel
       run: |
         cd kernel
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
-        
-        # Создаем конфигурацию Amlogic
         make meson64_defconfig
-        
-        # Отключаем отладку для ускорения процесса
         ./scripts/config --disable DEBUG_INFO
         ./scripts/config --disable DEBUG_INFO_DWARF4
         ./scripts/config --disable DEBUG_INFO_DWARF5
-        
-        # Собираем ядро, модули и все встроенные DTB (включая файлы для чипа S4)
         make -j$(nproc) Image modules dtbs
-        
-        # Устанавливаем модули во временную папку
         mkdir -p ../modules_install
         make modules_install INSTALL_MOD_PATH=../modules_install
 
-    - name: Download Pure Ubuntu XFCE RootFS (ARM64)
+    - name: Download Pure Ubuntu XFCE RootFS
       run: |
-        # Скачиваем чистую ОС Ubuntu (без Kodi) с легким рабочим столом XFCE
         mkdir rootfs
         wget -qO- https://ubuntu.com | tar -xzC rootfs/
 
-    - name: Create Flashable System Image (.img)
+    - name: Create Flashable System Image
       run: |
-        # Создаем пустой образ системы на 3 ГБ
         dd if=/dev/zero of=tanix_w2_xfce.img bs=1M count=3000
-        
-        # Размечаем диск
         sudo parted -s tanix_w2_xfce.img mklabel msdos
         sudo parted -s tanix_w2_xfce.img mkpart primary ext4 4MiB 100%
-        
-        # Монтируем виртуальный диск
         sudo losetup -Pf tanix_w2_xfce.img
         LOOP_DEV=$(losetup -j tanix_w2_xfce.img | cut -d: -f1)
         PART_DEV="${LOOP_DEV}p1"
-        
-        # Форматируем в ext4
         sudo mkfs.ext4 -F -L "ROOTFS" $PART_DEV
-        
         mkdir -p mnt
         sudo mount $PART_DEV mnt
-        
-        # Копируем операционную систему
         sudo cp -a rootfs/* mnt/
-        
-        # Переносим ядро и скомпилированный из исходников CoreELEC файл DTB для вашей Tanix 4/32
         sudo mkdir -p mnt/boot/amlogic
         sudo cp kernel/arch/arm64/boot/Image mnt/boot/
         sudo cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb mnt/boot/amlogic/
         sudo cp -a modules_install/lib/modules/* mnt/lib/modules/
-        
-        # Устанавливаем окружение рабочего стола XFCE внутрь образа системы
         sudo cp /usr/bin/qemu-aarch64-static mnt/usr/bin/
-        sudo chroot mnt /bin/bash -c "
-          apt-get update
-          apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends
-          useradd -m -s /bin/bash linuxuser
-          echo 'linuxuser:tanix' | chpasswd
-          usermod -aG sudo linuxuser
-        "
+        sudo chroot mnt /bin/bash -c "apt-get update && apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends && useradd -m -s /bin/bash linuxuser && echo 'linuxuser:tanix' | chpasswd && usermod -aG sudo linuxuser"
         sudo rm mnt/usr/bin/qemu-aarch64-static
-        
         sudo umount mnt
         sudo losetup -d $LOOP_DEV
 

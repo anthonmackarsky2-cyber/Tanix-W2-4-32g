@@ -11,7 +11,7 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs losetup wget
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler gcc-aarch64-linux-gnu binfmt-support qemu-user-static parted e2fsprogs wget
 
     - name: Clone CoreELEC Linux Kernel
       run: |

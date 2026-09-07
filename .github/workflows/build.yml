@@ -19,12 +19,11 @@ jobs:
         REAL_URL=$(echo "$B64_URL" | base64 --decode)
         git clone --depth=1 -b amlogic-5.4.210 "$REAL_URL" kernel
 
-        - name: Configure and Compile Kernel
-        run: |
+    - name: Configure and Compile Kernel
+      run: |
         cd kernel
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
-        # Используем встроенный рабочий конфигурационный файл CoreELEC/Amlogic
         make g12a_defconfig || make amlogic_defconfig || make defconfig
         ./scripts/config --disable DEBUG_INFO
         ./scripts/config --disable DEBUG_INFO_DWARF4
@@ -32,8 +31,6 @@ jobs:
         make -j$(nproc) Image modules dtbs
         mkdir -p ../modules_install
         make modules_install INSTALL_MOD_PATH=../modules_install
-
-
 
     - name: Download Pure Ubuntu XFCE RootFS
       run: |

@@ -31,10 +31,9 @@ jobs:
         make modules_install INSTALL_MOD_PATH=../modules_install
 
 
-    - name: Download Pure Ubuntu XFCE RootFS
-      run: |
-        mkdir rootfs
-        wget -qO- https://ubuntu.com | tar -xzC rootfs/
+        - name: Download Pure Ubuntu XFCE RootFS
+        run: mkdir rootfs && wget -qO- $(echo "aHR0cHM6Ly9jZGltYWdlLnVidW50dS5jb20vdWJ1bnR1LWJhc2UvcmVsZWFzZXMvMjQuMDQvcmVsZWFzZS91YnVudHUtYmFzZS0yNC4wNC1iYXNlLWFybTY0LnRhci5neg==" | base64 --decode) | tar -xzC rootfs/
+
 
     - name: Create Flashable System Image
       run: |

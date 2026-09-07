@@ -11,7 +11,7 @@ jobs:
     - name: Install Base Host Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs wget gcc-10-aarch64-linux-gnu
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs wget gcc-aarch64-linux-gnu
 
     - name: Clone CoreELEC Linux Kernel
       run: |
@@ -21,8 +21,7 @@ jobs:
       run: |
         cd kernel
         export ARCH=arm64
-        # Используем стабильный и проверенный системный компилятор GCC 10
-        export CROSS_COMPILE=aarch64-linux-gnu-gcc-10 -
+        export CROSS_COMPILE=aarch64-linux-gnu-
 
         make defconfig
         
@@ -60,7 +59,7 @@ jobs:
         
         make olddefconfig
         
-        # Пошаговая сборка компонентов проверенным компилятором GCC 10
+        # Пошаговая сборка компонентов проверенным компилятором
         make -j$(nproc) amlogic/s4_s905w2_4g.dtb
         make -j$(nproc) Image
         make -j$(nproc) modules || echo "Некоторые второстепенные модули пропущены"
@@ -77,12 +76,14 @@ jobs:
 
     - name: Assemble Linux System Structure
       run: |
+        # Собираем всю файловую структуру напрямую, без вызова losetup
         mkdir -p output_system/boot/amlogic
         cp -a rootfs/* output_system/
         cp kernel/arch/arm64/boot/Image output_system/boot/
         cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb output_system/boot/amlogic/
         cp -a modules_install/lib/modules/* output_system/lib/modules/ || true
         
+        # Создаем финальный архив системы
         tar -czf tanix_w2_system.tar.gz -C output_system .
 
     - name: Upload Final System Archive

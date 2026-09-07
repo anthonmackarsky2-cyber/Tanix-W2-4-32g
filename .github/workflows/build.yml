@@ -22,10 +22,9 @@ jobs:
         cd kernel
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
-        # Глобально отключаем абсолютно все предупреждения компилятора на уровне системы
         export KCFLAGS="-w -fpermissive"
 
-        # Генерация базовой конфигурации с отключением WERROR
+        # 1. Генерация базовой конфигурации
         make WERROR=0 g12a_defconfig || make WERROR=0 amlogic_defconfig || make WERROR=0 defconfig
         
         # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
@@ -60,15 +59,12 @@ jobs:
         ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
         ./scripts/config --disable DEBUG_INFO
         
+        # Фиксируем дефолты
         make WERROR=0 olddefconfig
         
-        # Пошаговая сборка компонентов проверенным компилятором
+        # 2. Пошаговая сборка ядра и дерева устройств (без ломающихся модулей)
         make -j$(nproc) WERROR=0 amlogic/s4_s905w2_4g.dtb
         make -j$(nproc) WERROR=0 Image
-        make -j$(nproc) WERROR=0 modules || echo "Некоторые второстепенные модули пропущены"
-        
-        mkdir -p ../modules_install
-        make modules_install INSTALL_MOD_PATH=../modules_install WERROR=0 || true
 
     - name: Download Pure Ubuntu XFCE RootFS
       run: |
@@ -79,14 +75,18 @@ jobs:
 
     - name: Assemble Linux System Structure
       run: |
-        # Собираем всю файловую структуру напрямую, без вызова losetup
+        # 1. Собираем файловую структуру напрямую
         mkdir -p output_system/boot/amlogic
         cp -a rootfs/* output_system/
         cp kernel/arch/arm64/boot/Image output_system/boot/
         cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb output_system/boot/amlogic/
-        cp -a modules_install/lib/modules/* output_system/lib/modules/ || true
         
-        # Создаем финальный архив системы
+        # 2. Разворачиваем рабочий стол XFCE внутри структуры
+        sudo cp /usr/bin/qemu-aarch64-static output_system/usr/bin/
+        sudo chroot output_system /bin/bash -c "apt-get update && apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends && useradd -m -s /bin/bash linuxuser && echo 'linuxuser:tanix' | chpasswd && usermod -aG sudo linuxuser"
+        sudo rm output_system/usr/bin/qemu-aarch64-static
+
+        # 3. Создаем финальный чистый архив системы
         tar -czf tanix_w2_system.tar.gz -C output_system .
 
     - name: Upload Final System Archive

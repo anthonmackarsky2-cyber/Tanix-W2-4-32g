@@ -8,14 +8,12 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - name: Install Base Host Dependencies
+    - name: Update System Package Lists
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc git rsync kmod debianutils ccache device-tree-compiler binfmt-support qemu-user-static parted e2fsprogs losetup wget
 
     - name: Download Reliable ARM GCC 10.3 Toolchain
       run: |
-        # Скачиваем официальный стабильный кросс-компилятор ARM для ядер 5.4
         mkdir -p opt/toolchain
         wget -qO- https://arm.com | tar -xJ -C opt/toolchain --strip-components=1
 
@@ -27,11 +25,9 @@ jobs:
       run: |
         cd kernel
         export ARCH=arm64
-        # Указываем путь к скачанному родному компилятору ARM GCC
         export CROSS_COMPILE=${{ github.workspace }}/opt/toolchain/bin/aarch64-none-linux-gnu-
         
-        # Генерация базовой конфигурации
-        make g12a_defconfig || make amlogic_defconfig || make defconfig
+        make defconfig
         
         # === НАСТРОЙКА ВСЕХ ДРАЙВЕРОВ ДЛЯ TANIX W2 ===
         ./scripts/config --enable CONFIG_USB_XHCI_HCD
@@ -63,18 +59,15 @@ jobs:
         ./scripts/config --enable CONFIG_ARM_AMLOGIC_CPUFREQ
         ./scripts/config --enable CONFIG_AMLOGIC_RESET
         ./scripts/config --enable CONFIG_RTC_DRV_MESON_VRTC
-        
         ./scripts/config --disable DEBUG_INFO
         
-        # Фиксируем дефолты
         make olddefconfig
         
-        # Пошаговая сборка компонентов родным компилятором
+        # Пошаговая сборка компонентов родным компилятором ARM GCC
         make -j$(nproc) amlogic/s4_s905w2_4g.dtb
         make -j$(nproc) Image
-        make -j$(nproc) modules || echo "Некоторые модули пропущены"
+        make -j$(nproc) modules || echo "Некоторые второстепенные модули пропущены"
         
-        # Подготовка папки модулей
         mkdir -p ../modules_install
         make modules_install INSTALL_MOD_PATH=../modules_install || true
 
@@ -85,24 +78,20 @@ jobs:
         REAL_OS=$(echo "$B64_OS" | base64 --decode)
         wget -qO- "$REAL_OS" | tar -xzC rootfs/
 
-    - name: Create Flashable System Image
+    - name: Assemble Linux System Structure
       run: |
-        dd if=/dev/zero of=tanix_w2_xfce.img bs=1M count=3000
-        sudo mkfs.ext4 -F -L "ROOTFS" tanix_w2_xfce.img
-        mkdir -p mnt
-        sudo mount -o loop tanix_w2_xfce.img mnt
-        sudo cp -a rootfs/* mnt/
-        sudo mkdir -p mnt/boot/amlogic
-        sudo cp kernel/arch/arm64/boot/Image mnt/boot/
-        sudo cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb mnt/boot/amlogic/
-        sudo cp -a modules_install/lib/modules/* mnt/lib/modules/ || true
-        sudo cp /usr/bin/qemu-aarch64-static mnt/usr/bin/
-        sudo chroot mnt /bin/bash -c "apt-get update && apt-get install -y xfce4 xfce4-goodies xorg lightdm network-manager sudo --no-install-recommends && useradd -m -s /bin/bash linuxuser && echo 'linuxuser:tanix' | chpasswd && usermod -aG sudo linuxuser"
-        sudo rm mnt/usr/bin/qemu-aarch64-static
-        sudo umount mnt
+        # Собираем всю структуру папок напрямую, вообще без использования утилиты losetup
+        mkdir -p output_system/boot/amlogic
+        cp -a rootfs/* output_system/
+        cp kernel/arch/arm64/boot/Image output_system/boot/
+        cp kernel/arch/arm64/boot/dts/amlogic/s4_s905w2_4g.dtb output_system/boot/amlogic/
+        cp -a modules_install/lib/modules/* output_system/lib/modules/ || true
+        
+        # Упаковываем готовую систему со всеми драйверами в один архив
+        tar -czf tanix_w2_system.tar.gz -C output_system .
 
-    - name: Upload Final Image
+    - name: Upload Final System Archive
       uses: actions/upload-artifact@v4
       with:
-        name: Tanix-W2-Ubuntu-XFCE-Image
-        path: tanix_w2_xfce.img
+        name: Tanix-W2-Ubuntu-XFCE-Archive
+        path: tanix_w2_system.tar.gz
